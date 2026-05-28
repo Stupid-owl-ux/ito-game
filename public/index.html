@@ -347,6 +347,15 @@ body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-s
 .particle { position: fixed; pointer-events: none; border-radius: 50%; animation: particleFall linear forwards; z-index: 200; }
 @keyframes particleFall { 0% { transform: translateY(0) rotate(0deg); opacity: 1; } 100% { transform: translateY(100vh) rotate(720deg); opacity: 0; } }
 
+/* ─── Leave Room Button ─── */
+.btn-leave-room {
+  padding: 0.3rem 0.8rem; border-radius: 8px;
+  border: 1px solid var(--border2); background: transparent;
+  color: var(--text3); font-size: 0.72rem; letter-spacing: 0.05em;
+  cursor: pointer; transition: all 0.15s; white-space: nowrap;
+}
+.btn-leave-room:hover { border-color: var(--accent); color: var(--accent-light); }
+
 /* ─── Toast ─── */
 .toast {
   position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%) translateY(4px);
@@ -429,6 +438,7 @@ body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-s
         <div class="dot-pulse"><span></span><span></span><span></span></div>
         Waiting for host to start…
       </div>
+      <button class="btn-leave-room" onclick="leaveRoom()" style="margin-top:1rem;">← Leave Room</button>
     </div>
   </div>
 </div>
@@ -445,6 +455,7 @@ body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-s
     </div>
     <div class="topbar-right">
       <div class="code-mini">Room <strong id="topbar-code">—</strong></div>
+      <button class="btn-leave-room" onclick="leaveRoom()">← Leave</button>
     </div>
   </div>
 
@@ -979,9 +990,48 @@ document.getElementById('btn-play-again').addEventListener('click', () => {
 });
 
 document.getElementById('btn-leave').addEventListener('click', () => {
-  sessionStorage.removeItem('ito_session');
-  location.reload();
+  leaveRoom();
 });
+
+function leaveRoom() {
+  // Stop all voice tracks
+  if (S.localStream) {
+    S.localStream.getTracks().forEach(t => t.stop());
+    S.localStream = null;
+  }
+  // Close all peer connections
+  Object.values(S.peers).forEach(({ pc }) => { try { pc.close(); } catch(e) {} });
+  S.peers = {};
+  // Remove all remote audio elements
+  document.querySelectorAll('audio[id^="audio-"]').forEach(a => a.remove());
+  // Clear session
+  sessionStorage.removeItem('ito_session');
+  // Reset state
+  S.playerId = null;
+  S.roomCode = null;
+  S.isHost = false;
+  S.myNumber = null;
+  S.myTheme = null;
+  S.roomState = null;
+  S.isMuted = false;
+  S.voiceJoined = false;
+  // Reset voice UI
+  document.getElementById('btn-join-voice').style.display = 'inline-block';
+  document.getElementById('btn-mute').style.display = 'none';
+  document.getElementById('voice-peers').innerHTML = '<span style="font-size:0.7rem;color:var(--text3);">Voice chat</span>';
+  // Hide result overlay if open
+  document.getElementById('result-overlay').classList.remove('active');
+  // Clear name inputs so they can start fresh
+  document.getElementById('create-name').value = '';
+  document.getElementById('join-name').value = '';
+  document.getElementById('join-code').value = '';
+  document.getElementById('join-error').textContent = '';
+  document.getElementById('btn-start-game').disabled = true;
+  // Disconnect and reconnect socket so server registers the leave
+  S.socket.disconnect();
+  S.socket.connect();
+  showScreen('join');
+}
 
 // ═══════════════════════════════════════════════════
 //  VOICE — WebRTC Mesh
